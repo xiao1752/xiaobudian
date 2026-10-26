@@ -2,7 +2,7 @@ package com.campusrun.sim.location
 
 import android.location.Location
 import android.location.LocationManager
-import android.location.LocationProvider
+import android.location.Criteria
 import android.os.Build
 import android.os.SystemClock
 import com.campusrun.sim.model.Telemetry
@@ -44,8 +44,8 @@ class MockLocationEngine(
                         true,  // supportsAltitude
                         true,  // supportsSpeed
                         true,  // supportsBearing
-                        LocationProvider.POWER_USAGE_LOW,
-                        LocationProvider.ACCURACY_FINE,
+                        Criteria.POWER_LOW,
+                        Criteria.ACCURACY_FINE,
                     )
                 }
                 locationManager.setTestProviderEnabled(provider, true)
