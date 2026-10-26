@@ -15,6 +15,7 @@ import com.campusrun.sim.location.MockLocationEngine
 import com.campusrun.sim.model.PaceMath
 import com.campusrun.sim.model.RoutePoint
 import com.campusrun.sim.model.Telemetry
+import com.campusrun.sim.model.TelemetryBus
 import com.campusrun.sim.simulation.SimulationEngine
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
@@ -185,13 +186,16 @@ class SimulationService : Service() {
                         // Paused: keep emitting the last fix at zero
                         // speed, do not advance, do not teleport.
                         lastTelemetry?.let { last ->
-                            mockEngine?.inject(last.copy(speedMps = 0.0))
+                            val pausedFix = last.copy(speedMps = 0.0)
+                            TelemetryBus.latest = pausedFix
+                            mockEngine?.inject(pausedFix)
                         }
                         delay(intervalMs)
                         continue
                     }
                     val telemetry = engine.tick(1.0 / fixRateHz)
                     lastTelemetry = telemetry
+                    TelemetryBus.latest = telemetry
                     mockEngine?.inject(telemetry)
                     delay(intervalMs)
                 }
@@ -209,6 +213,7 @@ class SimulationService : Service() {
         mockEngine?.stop()
         mockEngine = null
         lastTelemetry = null
+        TelemetryBus.latest = null
         paused = false
         releaseWakeLock()
         stopForeground(STOP_FOREGROUND_REMOVE)
