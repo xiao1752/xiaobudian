@@ -10,6 +10,7 @@ import com.campusrun.sim.model.PaceValidation
 import com.campusrun.sim.model.RoutePoint
 import com.campusrun.sim.model.SimConfig
 import com.campusrun.sim.model.Telemetry
+import com.campusrun.sim.model.TelemetryBus
 import com.campusrun.sim.model.haversineMetres
 import com.campusrun.sim.route.CampusLoop
 import com.campusrun.sim.route.GpxParser
@@ -20,6 +21,7 @@ import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.delay
 import java.io.InputStream
 
 data class UiState(
@@ -52,6 +54,19 @@ class SimulationViewModel : ViewModel() {
 
     private val _state = MutableStateFlow(UiState())
     val state: StateFlow<UiState> = _state.asStateFlow()
+    init {
+        // Poll the service's latest telemetry so MapScreen's "实时"
+        // speed/distance actually move while a run is active.
+        viewModelScope.launch {
+            while (true) {
+                delay(500)
+                val latest = TelemetryBus.latest
+                if (latest != null && latest != _state.value.telemetry) {
+                    _state.update { it.copy(telemetry = latest) }
+                }
+            }
+        }
+    }
 
     fun addPoint(point: RoutePoint) {
         _state.update {
