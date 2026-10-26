@@ -32,6 +32,15 @@ data class SimConfig(
     val loopRoute: Boolean = true,
 )
 
+/** Latest telemetry from the foreground service, for the UI to display.
+ *  The service runs in the same process, so a simple shared holder is
+  *  enough: the ViewModel polls it and updates UiState.telemetry, which
+   *  is what MapScreen shows as "实时". Without this, the UI always
+    *  showed 0.00 m/s / 0 m even while the service was injecting. */
+    object TelemetryBus {
+        @Volatile
+        var latest: Telemetry? = null
+    }
 data class Telemetry(
     val latitude: Double = 0.0,
     val longitude: Double = 0.0,
