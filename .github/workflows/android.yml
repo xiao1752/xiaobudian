@@ -1,0 +1,35 @@
+name: Build CampusRun Sim APK
+
+# 手机上也能用的云端编译：把本项目推到 GitHub 后，
+# 在手机浏览器里打开 Actions，就能拿到编好的 APK，
+# 不用在手机或电脑上装 Android Studio。
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Set up JDK 17
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: "17"
+      - name: Set up Android SDK
+        uses: android-actions/setup-android@v3
+      - name: Set up Gradle
+        uses: gradle/gradle-build-action@v3
+        with:
+          gradle-version: "8.7"
+      - name: Build debug APK
+        # 本项目目前没有 gradle wrapper，所以直接用上面装好的 Gradle 编译；
+        # 在 Android Studio 里打开时，Studio 会自己处理 wrapper。
+        run: gradle assembleDebug
+      - name: Upload APK
+        uses: actions/upload-artifact@v4
+        with:
+          name: CampusRunSim-debug-apk
+          path: app/build/outputs/apk/debug/app-debug.apk
