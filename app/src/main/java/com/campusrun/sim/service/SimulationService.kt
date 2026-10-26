@@ -16,6 +16,8 @@ import com.campusrun.sim.model.PaceMath
 import com.campusrun.sim.model.RoutePoint
 import com.campusrun.sim.model.Telemetry
 import com.campusrun.sim.model.TelemetryBus
+import com.campusrun.sim.simulation.JoystickController
+import com.campusrun.sim.simulation.JoystickInputBus
 import com.campusrun.sim.simulation.SimulationEngine
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
@@ -47,6 +49,11 @@ class SimulationService : Service() {
 
     companion object {
         const val ACTION_START = "com.campusrun.sim.START"
+        const val ACTION_START_JOYSTICK = "com.campusrun.sim.START_JOYSTICK"
+        const val EXTRA_START_LAT = "start_lat"
+        const val EXTRA_START_LON = "start_lon"
+        const val EXTRA_MAX_SPEED_MPS = "max_speed_mps"
+        const val EXTRA_STEP_LENGTH = "step_length_metres"
         const val ACTION_PAUSE = "com.campusrun.sim.PAUSE"
         const val ACTION_RESUME = "com.campusrun.sim.RESUME"
         const val ACTION_STOP = "com.campusrun.sim.STOP"
@@ -93,6 +100,19 @@ class SimulationService : Service() {
                 stopSimulation()
                 stopSelf()
                 return START_NOT_STICKY
+            }
+            ACTION_START_JOYSTICK -> {
+                val lat = intent.getDoubleExtra(EXTRA_START_LAT, 0.0)
+                val lon = intent.getDoubleExtra(EXTRA_START_LON, 0.0)
+                val maxSpeed = intent.getDoubleExtra(EXTRA_MAX_SPEED_MPS, 2.22)
+                val stepLength = intent.getDoubleExtra(EXTRA_STEP_LENGTH, 0.83)
+                val jitter = intent.getDoubleExtra(EXTRA_JITTER_METRES, 1.5)
+                val fixRate = intent.getIntExtra(EXTRA_FIX_RATE_HZ, 1).coerceIn(1, 5)
+                if (lat!= 0.0 && lon!= 0.0 && maxSpeed > 0) {
+                    paused = false
+                    startJoystickSimulation(lat, lon, maxSpeed, stepLength, jitter, fixRate)
+                    return START_STICKY
+                }
             }
             ACTION_START -> {
                 val route = parseRoute(intent.getStringExtra(EXTRA_ROUTE).orEmpty())
@@ -207,13 +227,72 @@ class SimulationService : Service() {
         }
     }
 
-    private fun stopSimulation() {
+
+        private fun startJoystickSimulation(
+                startLat: Double,
+            startLon: Double,
+            maxSpeedMps: Double,
+            stepLengthMetres: Double,
+            jitterMetres: Double,
+            fixRateHz: Int,
+        ) {
+            stopSimulation()
+            startForeground(NOTIFICATION_ID, notification())
+            acquireWakeLock()
+            val locationManager = getSystemService(Context.LOCATION_SERVICE) as LocationManager
+                            mockEngine = MockLocationEngine(locationManager).also { it.start() }
+                            val intervalMs = 1000L / fixRateHz
+                            val dt = 1.0 / fixRateHz
+                            job = scope.launch {
+                                var state = JoystickController.State()
+                                var lat = startLat
+                                var lon = startLon
+                                var distance = 0.0
+                                while (isActive) {
+                                    if (paused) {
+                                        lastTelemetry?.let { last ->
+                                                val pausedFix = last.copy(speedMps = 0.0)
+                                                TelemetryBus.latest = pausedFix
+                                            mockEngine?.inject(pausedFix)
+                                        }
+                                        delay(intervalMs)
+                                        continue
+                                        }
+                                    state = JoystickController.update(
+                                        state, JoystickInputBus.input, dt, maxSpeedMps, stepLengthMetres
+                                    )
+                                    val step = state.speedMps * dt
+                                    distance += step
+                                    val bearingRad = Math.toRadians(state.bearingDeg)
+                                    lat += step * kotlin.math.cos(bearingRad) / 111_320.0
+                                    lon += step * kotlin.math.sin(bearingRad) /
+                                    (111_320.0 * kotlin.math.cos(Math.toRadians(lat)))
+                                    val telemetry = Telemetry(
+                                        latitude = lat,
+                                        longitude = lon,
+                                        speedMps = state.speedMps,
+                                        bearingDeg = state.bearingDeg,
+                                        altitudeM = 50.0,
+                                        distanceM = distance,
+                                        isRunning = true,
+                                    )
+                                    lastTelemetry = telemetry
+                                    TelemetryBus.latest = telemetry
+                                    mockEngine?.inject(telemetry)
+                                    delay(intervalMs)
+                                }
+                                mockEngine?.stop()
+                            }
+                            }
+                            
+                private fun stopSimulation() {
         job?.cancel()
         job = null
         mockEngine?.stop()
         mockEngine = null
         lastTelemetry = null
         TelemetryBus.latest = null
+        JoystickInputBus.input = JoystickController.Input(0.0, 0.0)
         paused = false
         releaseWakeLock()
         stopForeground(STOP_FOREGROUND_REMOVE)
