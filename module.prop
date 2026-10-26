@@ -1,0 +1,6 @@
+id=campusrun-sim
+name=CampusRun Sim (system app)
+version=0.1.0
+versionCode=1
+author=CampusRun Sim prototype
+description=Installs CampusRun Sim as a system app (systemless, via KernelSU). Place the built APK at system/priv-app/CampusRunSim/CampusRunSim.apk inside this module before flashing from the KernelSU manager app. See the project README for the full steps and safety notes.
