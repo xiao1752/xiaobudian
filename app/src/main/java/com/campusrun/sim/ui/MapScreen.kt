@@ -1,5 +1,7 @@
 package com.campusrun.sim.ui
 
+import android.Manifest
+import android.content.pm.PackageManager
 import android.graphics.Color
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
@@ -23,6 +25,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.viewinterop.AndroidView
+import androidx.core.content.ContextCompat
 import com.campusrun.sim.model.PaceMath
 import com.campusrun.sim.model.RoutePoint
 import org.osmdroid.tileprovider.tilesource.TileSourceFactory
@@ -30,6 +33,8 @@ import org.osmdroid.util.GeoPoint
 import org.osmdroid.views.MapView
 import org.osmdroid.views.overlay.MapEventsOverlay
 import org.osmdroid.views.overlay.Marker
+import org.osmdroid.views.overlay.mylocation.GpsMyLocationProvider
+import org.osmdroid.views.overlay.mylocation.MyLocationNewOverlay
 import org.osmdroid.views.overlay.Polyline
 import org.osmdroid.events.MapEventsReceiver
 
@@ -59,6 +64,34 @@ fun MapScreen(viewModel: SimulationViewModel) {
                     setMultiTouchControls(true)
                     controller.setZoom(16.0)
                     controller.setCenter(GeoPoint(39.996, 116.394))
+                    // Real-position overlay: show the blue dot and,
+                    // the first GPS fix, move the map to the device's
+                    // real position instead of staying on Beijing.
+                    if (ContextCompat.checkSelfPermission(
+                        ctx,
+                        Manifest.permission.ACCESS_FINE_LOCATION,
+                        ) == PackageManager.PERMISSION_GRANTED ||
+                        ContextCompat.checkSelfPermission(
+                            ctx,
+                            Manifest.permission.ACCESS_COARSE_LOCATION,
+                            ) == PackageManager.PERMISSION_GRANTED
+                    ) {
+                        val myLocationOverlay = MyLocationNewOverlay(
+                            this,
+                            GpsMyLocationProvider(ctx),
+                        )
+                        myLocationOverlay.enableMyLocation()
+                        myLocationOverlay.runOnFirstFix {
+                            val loc = myLocationOverlay.myLocation
+                            if (loc != null) {
+                                post {
+                                    controller.animateTo(loc)
+                                    controller.setZoom(17.0)
+                                }
+                            }
+                        }
+                        overlays.add(myLocationOverlay)
+                    }
                     overlays.add(
                         MapEventsOverlay(
                             object : MapEventsReceiver {
@@ -80,11 +113,13 @@ fun MapScreen(viewModel: SimulationViewModel) {
                 }
             },
             update = { mapView ->
-                // Keep overlays in sync with state. The events overlay
-                // is always index 0; markers and the route follow it.
-                val events = mapView.overlays.firstOrNull()
+                                // Keep overlays in sync with state. Preserve the events overlay
+                // and the MyLocation overlay; markers and the route follow them.
+                val preserved = mapView.overlays.filter {
+                    it is MapEventsOverlay || it is MyLocationNewOverlay
+                }
                 mapView.overlays.clear()
-                if (events != null) mapView.overlays.add(events)
+                mapView.overlays.addAll(preserved)
                 if (state.route.isNotEmpty()) {
                     val line = Polyline().apply {
                         setPoints(
