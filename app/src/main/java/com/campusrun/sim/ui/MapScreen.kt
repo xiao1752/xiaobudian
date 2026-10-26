@@ -119,8 +119,8 @@ fun MapScreen(viewModel: SimulationViewModel) {
                             ) == PackageManager.PERMISSION_GRANTED
                     ) {
                         val myLocationOverlay = MyLocationNewOverlay(
-                            this,
                             GpsMyLocationProvider(ctx),
+                            this,
                         )
                         myLocationOverlay.enableMyLocation()
                         myLocationOverlay.runOnFirstFix {
