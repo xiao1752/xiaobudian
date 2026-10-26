@@ -19,7 +19,16 @@ jobs:
           distribution: temurin
           java-version: "17"
       - name: Set up Android SDK
-        uses: android-actions/setup-android@v3
+        # Fix for the failed run: android-actions/setup-android@v3 tries
+        # to install the obsolete 'tools' package and fails with
+        # sdkmanager exit code 1 on current runners. ubuntu-latest
+        # already ships an Android SDK, so use it directly and only
+        # ensure platform-34 / build-tools 34.0.0 are present.
+        run: |
+          echo "ANDROID_HOME=$ANDROID_HOME"
+          ls "$ANDROID_HOME/cmdline-tools" || true
+          yes | "$ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager" --licenses || true
+          "$ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager" "platforms;android-34" "build-tools;34.0.0" || true
       - name: Set up Gradle
         uses: gradle/gradle-build-action@v3
         with:
