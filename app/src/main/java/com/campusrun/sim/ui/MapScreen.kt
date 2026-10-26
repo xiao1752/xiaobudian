@@ -1,16 +1,28 @@
 package com.campusrun.sim.ui
 
 import android.Manifest
+import android.content.Context
+import android.content.Intent
 import android.content.pm.PackageManager
+import android.location.LocationManager
+import android.provider.Settings
 import android.graphics.Color
+import androidx.activity.compose.rememberLauncherForActivityResult
+import androidx.activity.result.contract.ActivityResultContracts
+import androidx.compose.foundation.background
+import androidx.compose.foundation.gestures.detectDragGestures
+import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.offset
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.Button
 import androidx.compose.material3.MaterialTheme
@@ -21,10 +33,19 @@ import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.Alignment
+import androidx.compose.ui.draw.clip
+import androidx.compose.ui.input.pointer.pointerInput
+import androidx.compose.ui.platform.LocalDensity
+import androidx.compose.ui.unit.IntOffset
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.viewinterop.AndroidView
+import androidx.compose.ui.graphics.Color as UiColor
 import androidx.core.content.ContextCompat
 import com.campusrun.sim.model.PaceMath
 import com.campusrun.sim.model.RoutePoint
@@ -46,12 +67,32 @@ import org.osmdroid.events.MapEventsReceiver
  * 4. Cadence: slider, shown with step length and steps/km together,
  *    so the three numbers are always visibly consistent.
  * 5. Start / Pause / Resume / Stop. Pause keeps the last position,
- *    it never teleports. There is no seek, no joystick, no overlay.
+ *    it never teleports. There is no seek and no overlay.
+ * 6. Joystick mode: an in-app drag pad that steers the free
+ *    simulation from the device's real position, for random
+  *    stage points. It never floats over another app.
  */
 @Composable
 fun MapScreen(viewModel: SimulationViewModel) {
     val state by viewModel.state.collectAsState()
     val context = LocalContext.current
+    val mapViewRef = remember { mutableStateOf<org.osmdroid.views.MapView?>(null) }
+    val density = LocalDensity.current
+    var padOffsetX by remember { mutableStateOf(0f) }
+    var padOffsetY by remember { mutableStateOf(0f) }
+    val gpxLauncher = rememberLauncherForActivityResult(
+        ActivityResultContracts.OpenDocument()
+    ) { uri ->
+        if (uri != null) {
+            try {
+                context.contentResolver.openInputStream(uri)?.use { input ->
+                    viewModel.importGpx(input)
+                }
+            } catch (_: Exception) {
+                viewModel.showError("GPX 文件打开失败，请换一个标准 GPX 文件再试。")
+            }
+        }
+    }
 
     Column(modifier = Modifier.fillMaxSize()) {
         AndroidView(
@@ -60,6 +101,7 @@ fun MapScreen(viewModel: SimulationViewModel) {
                 .weight(0.55f),
             factory = { ctx ->
                 MapView(ctx).apply {
+                mapViewRef.value = this
                     setTileSource(TileSourceFactory.MAPNIK)
                     setMultiTouchControls(true)
                     controller.setZoom(16.0)
@@ -180,6 +222,43 @@ fun MapScreen(viewModel: SimulationViewModel) {
                     enabled = !state.isRunning,
                 ) { Text("清空") }
             }
+            Row {
+                Button(
+                    onClick = {
+                        val overlay = mapViewRef.value?.overlays?.filterIsInstance<MyLocationNewOverlay>()?.firstOrNull()
+                        val loc = overlay?.myLocation
+                        if (loc != null) {
+                            mapViewRef.value?.controller?.animateTo(loc)
+                            mapViewRef.value?.controller?.setZoom(17.0)
+                        } else {
+                            viewModel.showError("还没拿到定位：请等地图出现蓝点，或确认已给定位权限并打开 GPS。")
+                        }
+                    },
+                ) { Text("回到我位置") }
+                Spacer(modifier = Modifier.padding(4.dp))
+                Button(
+                    onClick = { viewModel.saveMyRoute(context) },
+                    enabled = !state.isRunning,
+                ) { Text("保存我的校园路线") }
+                Spacer(modifier = Modifier.padding(4.dp))
+                Button(
+                    onClick = { viewModel.loadMyRoute(context) },
+                    enabled = !state.isRunning,
+                ) { Text("我的校园路线") }
+            }
+            Row {
+                Button(
+                    onClick = { gpxLauncher.launch(arrayOf("*/*")) },
+                    enabled = !state.isRunning,
+                ) { Text("导入 GPX") }
+                Spacer(modifier = Modifier.padding(4.dp))
+                Button(
+                    onClick = {
+                        context.startActivity(Intent(Settings.ACTION_APPLICATION_DEVELOPMENT_SETTINGS))
+                    },
+                ) { Text("去开发者选项选模拟位置应用") }
+            }
+            Text("开始前确认：开发者选项 > 选择模拟位置应用 已选 CampusRun Sim，否则别的 App 定位不会动。")
             Text(
                 "路线长度：%.2f 公里".format(state.routeDistanceMetres / 1000.0)
             )
@@ -192,8 +271,8 @@ fun MapScreen(viewModel: SimulationViewModel) {
             Slider(
                 value = state.config.paceMinPerKm.toFloat(),
                 onValueChange = { viewModel.updatePace(it.toDouble()) },
-                valueRange = 5.0f..10.0f,
-                steps = 9,
+                valueRange = 3.0f..12.0f,
+                steps = 17,
                 enabled = !state.isRunning,
             )
 
@@ -201,8 +280,8 @@ fun MapScreen(viewModel: SimulationViewModel) {
             Slider(
                 value = state.config.cadenceSpm.toFloat(),
                 onValueChange = { viewModel.updateCadence(it.toDouble()) },
-                valueRange = 130.0f..200.0f,
-                steps = 13,
+                valueRange = 50.0f..300.0f,
+                steps = 24,
                 enabled = !state.isRunning,
             )
             Text(
@@ -245,6 +324,103 @@ fun MapScreen(viewModel: SimulationViewModel) {
                     state.telemetry.distanceM,
                 )
             )
+            if (state.isRunning) {
+                Text(
+                    "已跑 %d 分 %02d 秒，目标 2.0-2.5 公里，暂停别超 5分钟。".format(
+                        state.elapsedSeconds / 60,
+                        state.elapsedSeconds % 60,
+                    )
+                )
+            }
+            Spacer(modifier = Modifier.height(12.dp))
+            Text("第 5 步：摇杆模式（随机点位用，不用路线）")
+            Row {
+                Text("摇杆模式")
+                Spacer(modifier = Modifier.padding(4.dp))
+                Switch(
+                    checked = state.isJoystickMode,
+                    onCheckedChange = { viewModel.setJoystickMode(it) },
+                    enabled = !state.isRunning,
+                )
+            }
+            if (state.isJoystickMode) {
+                Text("先在小步点里开始跑，看到当前随机点位后切回这里推摇杆；松手 = 平滑减速到 0，仍在发位置。")
+                Row {
+                    if (!state.isRunning) {
+                        Button(onClick = {
+                            val manager = context.getSystemService(
+                                Context.LOCATION_SERVICE
+                            ) as LocationManager
+                            val loc = try {
+                                manager.getLastKnownLocation(LocationManager.GPS_PROVIDER)
+                                ?: manager.getLastKnownLocation(LocationManager.NETWORK_PROVIDER)
+                            } catch (_: SecurityException) {
+                                null
+                            }
+                            if (loc == null) {
+                                viewModel.showError("还没拿到定位：请等地图出现蓝点再开始摇杆。")
+                            } else {
+                                viewModel.startJoystick(context, loc.latitude, loc.longitude)
+                            }
+                        }) { Text("开始摇杆") }
+                    } else if (!state.isPaused) {
+                        Button(onClick = { viewModel.pause(context) }) { Text("暂停") }
+                    } else {
+                        Button(onClick = { viewModel.resume(context) }) { Text("继续") }
+                    }
+                    Spacer(modifier = Modifier.padding(4.dp))
+                    OutlinedButton(
+                        onClick = { viewModel.stop(context) },
+                        enabled = state.isRunning,
+                    ) { Text("停止") }
+                }
+                Box(
+                    modifier = Modifier
+                    .size(180.dp)
+                    .clip(CircleShape)
+                    .background(UiColor(0xFFE8E0F5))
+                    .pointerInput(Unit) {
+                        detectDragGestures(
+                            onDragEnd = {
+                                padOffsetX = 0f
+                                padOffsetY = 0f
+                                viewModel.updateJoystick(0.0, 0.0)
+                            },
+                            onDragCancel = {
+                                padOffsetX = 0f
+                                padOffsetY = 0f
+                                viewModel.updateJoystick(0.0, 0.0)
+                            },
+                        ) { change, dragAmount ->
+                            change.consume()
+                            val radius = 70f * density.density
+                            var nx = padOffsetX + dragAmount.x
+                            var ny = padOffsetY + dragAmount.y
+                            val mag = kotlin.math.hypot(nx, ny)
+                            if (mag > radius) {
+                                nx *= radius / mag
+                                ny *= radius / mag
+                            }
+                            padOffsetX = nx
+                            padOffsetY = ny
+                            viewModel.updateJoystick(
+                                (nx / radius).toDouble(),
+                                (-ny / radius).toDouble(),
+                            )
+                        }
+                    },
+                    contentAlignment = Alignment.Center,
+                ) {
+                    Box(
+                        modifier = Modifier
+                        .offset { IntOffset(padOffsetX.toInt(), padOffsetY.toInt()) }
+                        .size(60.dp)
+                        .clip(CircleShape)
+                        .background(UiColor(0xFF6750A4)),
+                    )
+                }
+                Text("摇杆：上 = 北，下 = 南，左 = 西，右 = 东，推满 = 当前配速，松手减速。")
+            }
             Text("注意：本工具只做通用 GPS 路线模拟测试，不保证绕过任何检测。")
         }
     }
