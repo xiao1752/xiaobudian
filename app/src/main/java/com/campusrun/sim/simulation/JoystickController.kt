@@ -31,6 +31,15 @@ import kotlin.math.min
  * 该阶段已通过 → 出现下一阶段点位 → 重复。
  * 也可以用分屏同时看两个 App，但不要让摇杆盖住小步点。
  */
+
+/** Shared joystick input, read by the foreground service each tick.
+ *  The pad UI writes here on drag; drag end writes (0, 0), so the
+  *  service smoothly decelerates instead of stopping dead. */
+object JoystickInputBus {
+    @Volatile
+    var input: JoystickController.Input = JoystickController.Input(0.0, 0.0)
+}
+
 object JoystickController {
 
     data class State(
