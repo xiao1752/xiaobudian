@@ -38,6 +38,7 @@ import kotlin.math.min
 object JoystickInputBus {
     @Volatile
     var input: JoystickController.Input = JoystickController.Input(0.0, 0.0)
+    var locked: Boolean = false
 }
 
 object JoystickController {
