@@ -58,14 +58,15 @@ data class UiState(
  */
 class SimulationViewModel : ViewModel() {
 
-
     private val _state = MutableStateFlow(UiState())
     val state: StateFlow<UiState> = _state.asStateFlow()
-    
+
     private var runStartMs: Long = 0
     private var pauseStartMs: Long? = null
-    
+
     init {
+        // Poll the service's latest telemetry so MapScreen's "实时"
+        // speed/distance actually move while a run is active.
         viewModelScope.launch {
             while (true) {
                 delay(500)
@@ -73,12 +74,12 @@ class SimulationViewModel : ViewModel() {
                 val elapsed = if (_state.value.isRunning && runStartMs > 0) {
                     (System.currentTimeMillis() - runStartMs) / 1000
                 } else 0L
-                if ((latest!= null && latest!= _state.value.telemetry) ||
-                            elapsed!= _state.value.elapsedSeconds
+                if ((latest != null && latest != _state.value.telemetry) ||
+                    elapsed != _state.value.elapsedSeconds
                 ) {
                     _state.update {
                         it.copy(
-                            telemetry = latest?: it.telemetry,
+                            telemetry = latest ?: it.telemetry,
                             elapsedSeconds = elapsed,
                         )
                     }
@@ -88,8 +89,9 @@ class SimulationViewModel : ViewModel() {
     }
 
     fun showError(message: String) {
-        _state.update { it.copy(error = message)}
+        _state.update { it.copy(error = message) }
     }
+
     fun setJoystickMode(enabled: Boolean) {
         JoystickInputBus.input = JoystickController.Input(0.0, 0.0)
         _state.update {
@@ -99,31 +101,35 @@ class SimulationViewModel : ViewModel() {
 
     fun updateJoystick(x: Double, y: Double) {
         JoystickInputBus.input = JoystickController.Input(x, y)
-        _state.update { it.copy(joystickX = x, joystickY = y)}
+        _state.update { it.copy(joystickX = x, joystickY = y) }
     }
 
     fun saveMyRoute(context: Context) {
-        val route = _state.value.route.ifEmpty { _state.value.selectedPoints }
-        if (route.size < 2) {
+        val points = _state.value.route.ifEmpty { _state.value.selectedPoints }
+        if (points.size < 2) {
             _state.update { it.copy(error = "先选点并生成路线，再保存为我的校园路线。") }
             return
         }
-        val raw = route.joinToString(";") { "${it.latitude},${it.longitude}" }
-        context.getSharedPreferences("campus_run", Context.MODE_PRIVATE).edit().putString("my_campus_route", raw).apply()
+        val raw = points.joinToString(";") { "${it.latitude},${it.longitude}" }
+        context.getSharedPreferences("campus_run", Context.MODE_PRIVATE)
+            .edit().putString("my_campus_route", raw).apply()
         _state.update { it.copy(error = null) }
     }
 
     fun loadMyRoute(context: Context) {
-        val raw = context.getSharedPreferences("campus_run", Context.MODE_PRIVATE).getString("my_campus_route", null)
-        if (raw.isNullOrEmpty()) {
+        val raw = context.getSharedPreferences("campus_run", Context.MODE_PRIVATE)
+            .getString("my_campus_route", null)
+        if (raw.isNullOrBlank()) {
             _state.update { it.copy(error = "还没有保存过的校园路线：先选点生成路线，再点保存。") }
             return
         }
-        val points = raw.split(";").mapNotNull { item ->
-                val parts = item.split(",")
-                val lat = parts.getOrNull(0)?.toDoubleOrNull()
-                val lon = parts.getOrNull(1)?.toDoubleOrNull()
-                if (lat == null || lon == null) null else RoutePoint(lat, lon)
+        val points = raw.split(";").mapNotNull { part ->
+            val pieces = part.split(",")
+            if (pieces.size != 2) null else {
+                val lat = pieces[0].toDoubleOrNull()
+                val lon = pieces[1].toDoubleOrNull()
+                if (lat != null && lon != null) RoutePoint(lat, lon) else null
+            }
         }
         if (points.size < 2) {
             _state.update { it.copy(error = "保存的路线已损坏，请重新选点生成。") }
@@ -161,6 +167,18 @@ class SimulationViewModel : ViewModel() {
 
     fun loadCampusLoop() {
         val loop = CampusLoop.exampleLoop
+        _state.update {
+            it.copy(
+                selectedPoints = loop,
+                route = CampusLoop.closed(loop),
+                routeDistanceMetres = routeDistance(CampusLoop.closed(loop)),
+                error = null,
+            )
+        }
+    }
+
+    fun loadCampusLoopAround(lat: Double, lon: Double) {
+        val loop = CampusLoop.loopAround(lat, lon)
         _state.update {
             it.copy(
                 selectedPoints = loop,
@@ -211,9 +229,11 @@ class SimulationViewModel : ViewModel() {
         viewModelScope.launch {
             val routed = OsrmApi.routeThrough(points)
             if (routed == null || routed.size < 2) {
-            val fallback = if (_state.value.config.loopRoute) {
-                CampusLoop.closed(points)
-            } else points
+                // Offline fallback: straight lines through the chosen
+                // points, so a run is still possible without OSRM.
+                val fallback = if (_state.value.config.loopRoute) {
+                    CampusLoop.closed(points)
+                } else points
                 _state.update {
                     it.copy(
                         route = fallback,
@@ -275,16 +295,16 @@ class SimulationViewModel : ViewModel() {
     private fun checkValidWindow(): String? {
         val cal = java.util.Calendar.getInstance()
         val ok = PaceValidation.isWithinValidWindow(
-                        cal.get(java.util.Calendar.HOUR_OF_DAY),
-                               cal.get(java.util.Calendar.MINUTE),
+            cal.get(java.util.Calendar.HOUR_OF_DAY),
+            cal.get(java.util.Calendar.MINUTE),
         )
         return if (ok) null else "现在不在有效时段 06:30-23:00 内，开始可能不计成绩。"
     }
-    
+
     fun startJoystick(context: Context, startLat: Double, startLon: Double) {
         val current = _state.value
         checkValidWindow()?.let {
-            _state.update { s -> s.copy(error = it)}
+            _state.update { s -> s.copy(error = it) }
             return
         }
         val validation = PaceValidation.validate(
@@ -299,43 +319,43 @@ class SimulationViewModel : ViewModel() {
         }
         val locationManager =
             context.getSystemService(Context.LOCATION_SERVICE) as LocationManager
-    if (!locationManager.isProviderEnabled(LocationManager.GPS_PROVIDER)) {
-        _state.update {
-            it.copy(error = "GPS 未开启：请先在系统设置里打开定位，再开始模拟。")
+        if (!locationManager.isProviderEnabled(LocationManager.GPS_PROVIDER)) {
+            _state.update {
+                it.copy(error = "GPS 未开启：请先在系统设置里打开定位，再开始模拟。")
+            }
+            return
         }
-        return
-    }
-    val intent = Intent(context, SimulationService::class.java).apply {
-        action = SimulationService.ACTION_START_JOYSTICK
-        putExtra(SimulationService.EXTRA_START_LAT, startLat)
-        putExtra(SimulationService.EXTRA_START_LON, startLon)
-        putExtra(
-            SimulationService.EXTRA_MAX_SPEED_MPS,
-            PaceMath.paceToSpeedMps(current.config.paceMinPerKm),
-        )
-        putExtra(
-            SimulationService.EXTRA_STEP_LENGTH,
-            current.stepLengthMetres,
-        )
-        putExtra(SimulationService.EXTRA_JITTER_METRES, current.config.jitterMetres)
-        putExtra(SimulationService.EXTRA_FIX_RATE_HZ, current.config.fixRateHz)
-    }
-    if (android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.O) {
-        context.startForegroundService(intent)
-    } else {
-        context.startService(intent)
-    }
-    runStartMs = System.currentTimeMillis()
-    pauseStartMs = null
+        val intent = Intent(context, SimulationService::class.java).apply {
+            action = SimulationService.ACTION_START_JOYSTICK
+            putExtra(SimulationService.EXTRA_START_LAT, startLat)
+            putExtra(SimulationService.EXTRA_START_LON, startLon)
+            putExtra(
+                SimulationService.EXTRA_MAX_SPEED_MPS,
+                PaceMath.paceToSpeedMps(current.config.paceMinPerKm),
+            )
+            putExtra(
+                SimulationService.EXTRA_STEP_LENGTH,
+                current.stepLengthMetres,
+            )
+            putExtra(SimulationService.EXTRA_JITTER_METRES, current.config.jitterMetres)
+            putExtra(SimulationService.EXTRA_FIX_RATE_HZ, current.config.fixRateHz)
+        }
+        if (android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.O) {
+            context.startForegroundService(intent)
+        } else {
+            context.startService(intent)
+        }
+        runStartMs = System.currentTimeMillis()
+        pauseStartMs = null
         _state.update {
             it.copy(isRunning = true, isPaused = false, error = null)
         }
     }
-    
-            fun start(context: Context) {
+
+    fun start(context: Context) {
         val current = _state.value
         checkValidWindow()?.let {
-            _state.update { s -> s.copy(error = it)}
+            _state.update { s -> s.copy(error = it) }
             return
         }
         if (!current.config.loopRoute && current.routeDistanceMetres < 1500.0) {
@@ -425,8 +445,8 @@ class SimulationViewModel : ViewModel() {
             action = SimulationService.ACTION_STOP
         }
         context.startService(intent)
-JoystickInputBus.input = JoystickController.Input(0.0, 0.0)
-runStartMs = 0
+        JoystickInputBus.input = JoystickController.Input(0.0, 0.0)
+        runStartMs = 0
         pauseStartMs = null
         _state.update {
             it.copy(
