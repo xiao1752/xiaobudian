@@ -320,6 +320,25 @@ fun MapScreen(viewModel: SimulationViewModel) {
               ) { Text("用 OSM 底图") }
             }
             Row {
+             Button(
+              onClick = {
+               mapViewRef.value?.apply {
+                setTileSource(GaodeTileSource)
+                invalidate()
+               }
+              },
+              ) { Text("标准地图") }
+             Spacer(modifier = Modifier.padding(4.dp))
+             Button(
+              onClick = {
+               mapViewRef.value?.apply {
+                setTileSource(GaodeSatelliteTileSource)
+                invalidate()
+               }
+              },
+              ) { Text("卫星地图") }
+            }
+            Row {
                 Button(
                     onClick = { viewModel.loadMyRoute(context) },
                     enabled = !state.isRunning,
