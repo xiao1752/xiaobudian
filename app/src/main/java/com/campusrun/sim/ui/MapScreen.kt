@@ -498,7 +498,8 @@ fun MapScreen(viewModel: SimulationViewModel) {
                                  context.startService(Intent(context, FloatingJoystickService::class.java))
                                  viewModel.startJoystick(context, loc.latitude, loc.longitude)
                                 } else {
-                                 viewModel.showError("请先允许悬浮窗权限，再开始摇杆。")
+                                 viewModel.startJoystick(context, loc.latitude, loc.longitude)
+                                 viewModel.showError("未授予悬浮窗权限，悬浮摇杆不可用，但仍可使用应用内摇杆。")
                                 }
                             }
                         }) { Text("开始摇杆") }
