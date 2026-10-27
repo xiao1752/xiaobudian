@@ -1,4 +1,6 @@
 package com.campusrun.sim.ui
+import android.net.Uri
+import com.campusrun.sim.simulation.JoystickInputBus
 
 import android.Manifest
 import android.content.Context
@@ -92,6 +94,27 @@ object GaodeTileSource : XYTileSource(
   val y = MapTileIndex.getY(pTileIndex)
   val z = MapTileIndex.getZoom(pTileIndex)
   return getBaseUrl() + "x=" + x + "&y=" + y + "&z=" + z + "&lang=zh_cn&size=1&scale=1&style=7"
+ }
+}
+object GaodeSatelliteTileSource: XYTileSource(
+ "GaodeSatellite",
+ 3,
+ 19,
+ 256,
+ ".png",
+ arrayOf(
+  "https://webrd01.is.autonavi.com/appmaptile?",
+  "https://webrd02.is.autonavi.com/appmaptile?",
+  "https://webrd03.is.autonavi.com/appmaptile?",
+  "https://webrd04.is.autonavi.com/appmaptile?"
+  )
+ ) {
+ override fun getTileURLString(pTileIndex: Long): String {
+  val x = MapTileIndex.getX(pTileIndex)
+
+  val y = MapTileIndex.getY(pTileIndex)
+  val z = MapTileIndex.getZoom(pTileIndex)
+  return getBaseUrl() + "x=" + x + "&y=" + y + "&z=" + z + "&lang=zh_cn&size=1&scale=1&style=6"
  }
 }
 
