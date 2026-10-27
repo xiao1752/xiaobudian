@@ -20,6 +20,21 @@ object CampusLoop {
         RoutePoint(39.9990, 116.3900),
     )
 
+    /** Loop centred on the user's real position, about 2 km around
+     *  (444 m tall x about 550 m wide at mid-latitudes), so the
+     *  example button is visible on screen instead of a far-away
+     *  Beijing preset. The old Beijing preset stays as exampleLoop
+     *  for reference only and is no longer used by the UI. */
+    fun loopAround(lat: Double, lon: Double): List<RoutePoint> {
+        return listOf(
+            RoutePoint(lat + 0.002, lon - 0.003),
+            RoutePoint(lat + 0.002, lon + 0.003),
+            RoutePoint(lat - 0.002, lon + 0.003),
+            RoutePoint(lat - 0.002, lon - 0.003),
+            RoutePoint(lat + 0.002, lon - 0.003),
+        )
+    }
+
     /** Close an open route so it can loop without a jump. */
     fun closed(points: List<RoutePoint>): List<RoutePoint> {
         if (points.isEmpty()) return points
