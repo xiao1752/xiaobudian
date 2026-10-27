@@ -49,6 +49,8 @@ import androidx.compose.ui.graphics.Color as UiColor
 import androidx.core.content.ContextCompat
 import com.campusrun.sim.model.PaceMath
 import com.campusrun.sim.model.RoutePoint
+import org.osmdroid.tileprovider.MapTileIndex
+import org.osmdroid.tileprovider.tilesource.XYTileSource
 import org.osmdroid.tileprovider.tilesource.TileSourceFactory
 import org.osmdroid.util.GeoPoint
 import org.osmdroid.views.MapView
@@ -72,6 +74,27 @@ import org.osmdroid.events.MapEventsReceiver
  *    simulation from the device's real position, for random
   *    stage points. It never floats over another app.
  */
+object GaodeTileSource : XYTileSource(
+ "Gaode",
+ 3,
+ 19,
+ 256,
+ ".png",
+ arrayOf(
+  "https://webrd01.is.autonavi.com/appmaptile?",
+  "https://webrd02.is.autonavi.com/appmaptile?",
+  "https://webrd03.is.autonavi.com/appmaptile?",
+  "https://webrd04.is.autonavi.com/appmaptile?"
+  )
+ ) {
+ override fun getTileURLString(pTileIndex: Long): String {
+  val x = MapTileIndex.getX(pTileIndex)
+  val y = MapTileIndex.getY(pTileIndex)
+  val z = MapTileIndex.getZoom(pTileIndex)
+  return getBaseUrl() + "x=" + x + "&y=" + y + "&z=" + z + "&lang=zh_cn&size=1&scale=1&style=7"
+ }
+}
+
 @Composable
 fun MapScreen(viewModel: SimulationViewModel) {
     val state by viewModel.state.collectAsState()
@@ -102,7 +125,7 @@ fun MapScreen(viewModel: SimulationViewModel) {
             factory = { ctx ->
                 MapView(ctx).apply {
                 mapViewRef.value = this
-                    setTileSource(TileSourceFactory.MAPNIK)
+                    setTileSource(GaodeTileSource)
                     setUseDataConnection(true)
                     setMultiTouchControls(true)
                     controller.setZoom(16.0)
@@ -257,11 +280,21 @@ fun MapScreen(viewModel: SimulationViewModel) {
                 Button(
                  onClick = {
                   mapViewRef.value?.apply {
-                   setTileSource(TileSourceFactory.MAPNIK)
+                   setTileSource(GaodeTileSource)
                    invalidate()
                   }
                  },
                  ) { Text("刷新底图") }
+            }
+            Row {
+             Button(
+              onClick = {
+               mapViewRef.value?.apply {
+                setTileSource(TileSourceFactory.MAPNIK)
+                invalidate()
+               }
+              },
+              ) { Text("用 OSM 底图") }
             }
             Row {
                 Button(
