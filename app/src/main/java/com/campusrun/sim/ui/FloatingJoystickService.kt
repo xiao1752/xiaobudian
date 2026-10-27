@@ -1,5 +1,8 @@
 package com.campusrun.sim.ui
 
+import android.app.Notification
+import android.app.NotificationChannel
+import android.app.NotificationManager
 import android.app.Service
 import android.content.Context
 import android.content.Intent
@@ -42,6 +45,19 @@ class FloatingJoystickService : Service() {
             stopSelf()
             return
         }
+        val notificationManager = getSystemService(NotificationManager::class.java)
+        notificationManager.createNotificationChannel(
+                NotificationChannel(
+                        "campusrun_joystick",
+                        "CampusRun Joystick",
+                        NotificationManager.IMPORTANCE_LOW,
+                    )
+                )
+        val notification = Notification.Builder(this, "campusrun_joystick")
+            .setContentTitle("CampusRun 悬浮摇杆运行中")
+                .setSmallIcon(android.R.drawable.ic_dialog_info)
+                    .build()
+                    startForeground(1, notification)
         val wm = getSystemService(Context.WINDOW_SERVICE) as WindowManager
         windowManager = wm
         val root = LinearLayout(this).apply {
