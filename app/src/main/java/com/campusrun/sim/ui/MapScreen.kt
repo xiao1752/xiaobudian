@@ -51,7 +51,7 @@ import androidx.compose.ui.graphics.Color as UiColor
 import androidx.core.content.ContextCompat
 import com.campusrun.sim.model.PaceMath
 import com.campusrun.sim.model.RoutePoint
-import org.osmdroid.tileprovider.MapTile
+import org.osmdroid.util.MapTileIndex
 import org.osmdroid.tileprovider.tilesource.XYTileSource
 import org.osmdroid.tileprovider.tilesource.TileSourceFactory
 import org.osmdroid.util.GeoPoint
@@ -89,10 +89,10 @@ object GaodeTileSource : XYTileSource(
   "https://webrd04.is.autonavi.com/appmaptile?"
   )
  ) {
- override fun getTileURLString(aTile: MapTile): String {
-  val x = aTile.x
-  val y = aTile.y
-  val z = aTile.zoomLevel
+ override fun getTileURLString(pTileIndex: Long): String {
+  val x = MapTileIndex.getX(pTileIndex)
+  val y = MapTileIndex.getY(pTileIndex)
+  val z = MapTileIndex.getZoom(pTileIndex)
   return getBaseUrl() + "x=" + x + "&y=" + y + "&z=" + z + "&lang=zh_cn&size=1&scale=1&style=7"
  }
 }
@@ -109,11 +109,11 @@ object GaodeSatelliteTileSource: XYTileSource(
   "https://webrd04.is.autonavi.com/appmaptile?"
   )
  ) {
- override fun getTileURLString(aTile: MapTile): String {
-  val x = aTile.x
+ override fun getTileURLString(pTileIndex: Long): String {
+  val x = MapTileIndex.getX(pTileIndex)
 
-  val y = aTile.y
-  val z = aTile.zoomLevel
+  val y = MapTileIndex.getY(pTileIndex)
+  val z = MapTileIndex.getZoom(pTileIndex)
   return getBaseUrl() + "x=" + x + "&y=" + y + "&z=" + z + "&lang=zh_cn&size=1&scale=1&style=6"
  }
 }
