@@ -24,8 +24,8 @@ data class SimConfig(
     val paceMinPerKm: Double = 7.5,
     /** Cadence in steps per minute. */
     val cadenceSpm: Double = 160.0,
-    /** GPS fixes per second, 1..5. Higher is not more realistic. */
-    val fixRateHz: Int = 1,
+    /** GPS fixes per second, 1..5. Higher is not more realistic. 1 Hz causes visible move-stop stutter in other apps. */
+    val fixRateHz: Int = 5,
     /** Small GPS jitter in metres, 0..3. Keep it small and non-zero. */
     val jitterMetres: Double = 1.5,
     /** Repeat the route when it ends (campus loop). */
