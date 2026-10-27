@@ -154,6 +154,15 @@ class SimulationViewModel : ViewModel() {
         }
     }
 
+    /** Freehand drawing: add a point only if it is at least 15 m
+     *  from the last drawn point, so a drag produces a clean
+     *  polyline instead of thousands of duplicate points. */
+    fun addDrawnPoint(point: RoutePoint) {
+        val last = _state.value.selectedPoints.lastOrNull()
+        if (last != null && haversineMetres(last, point) < 15.0) return
+        addPoint(point)
+    }
+
     fun clearRoute() {
         _state.update {
             it.copy(
