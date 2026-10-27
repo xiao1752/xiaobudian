@@ -125,7 +125,7 @@ fun MapScreen(viewModel: SimulationViewModel) {
     val mapViewRef = remember { mutableStateOf<org.osmdroid.views.MapView?>(null) }
     val density = LocalDensity.current
     var padOffsetX by remember { mutableStateOf(0f) }
-    var padOffsetY by remember { mutableStateOf(0f) }
+    var padOffsetY by remember { mutableStateOf(0f) }; var drawMode by remember { mutableStateOf(false) }
     val gpxLauncher = rememberLauncherForActivityResult(
         ActivityResultContracts.OpenDocument()
     ) { uri ->
@@ -150,7 +150,7 @@ fun MapScreen(viewModel: SimulationViewModel) {
                 mapViewRef.value = this
                     setTileSource(GaodeTileSource)
                     setUseDataConnection(true)
-                    setMultiTouchControls(true)
+                    val mapView = this; setMultiTouchControls(true); mapView.setOnTouchListener { _, event -> if (DrawModeBus.enabled) { if (event.action == android.view.MotionEvent.ACTION_DOWN || event.action == android.view.MotionEvent.ACTION_MOVE) { val geoPoint = mapView.projection.fromPixels(event.x.toInt(), event.y.toInt()); viewModel.addDrawnPoint(RoutePoint(geoPoint.latitude, geoPoint.longitude)) }; true } else { false } }
                     controller.setZoom(16.0)
                     controller.setCenter(GeoPoint(39.996, 116.394))
                     // Real-position overlay: show the blue dot and,
@@ -250,7 +250,7 @@ fun MapScreen(viewModel: SimulationViewModel) {
                 Spacer(modifier = Modifier.height(4.dp))
             }
 
-            Text("第 1 步：地图长按选点（已选 ${state.selectedPoints.size} 个）")
+            Text("第 1 步：地图长按选点（已选 ${state.selectedPoints.size} 个）"); Row { Text("手绘画路线"); Spacer(modifier = Modifier.padding(4.dp)); Switch(checked = drawMode, onCheckedChange = { drawMode = it; DrawModeBus.enabled = it }, enabled = !state.isRunning) }; Text("打开后在地图上拖动手指画线，画完关掉开关，再点生成路线、开始。")
             Row {
                 Button(
                     onClick = { viewModel.buildRoute() },
