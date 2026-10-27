@@ -260,7 +260,35 @@ fun MapScreen(viewModel: SimulationViewModel) {
                 }
                 Spacer(modifier = Modifier.padding(4.dp))
                 OutlinedButton(
-                    onClick = { viewModel.loadCampusLoop() },
+                    onClick = {
+                     val mapView = mapViewRef.value
+                     var overlay = mapView?.overlays?.filterIsInstance<MyLocationNewOverlay>()?.firstOrNull()
+                     if (overlay == null && mapView != null) {
+                      try {
+                       overlay = MyLocationNewOverlay(GpsMyLocationProvider(context), mapView)
+                       overlay.enableMyLocation()
+                       mapView.overlays.add(overlay)
+                      } catch (_: SecurityException) {
+                       overlay = null
+                      }
+                     }
+                     val loc = overlay?.myLocation
+                     if (loc != null) {
+                      viewModel.loadCampusLoopAround(loc.latitude, loc.longitude)
+                      mapViewRef.value?.controller?.animateTo(loc)
+                      mapViewRef.value?controller?.setZoom(17.0)
+                     } else {
+                      val manager = context.getSystemService(Context.LOCATION_SERVICE) as LocationManager
+                      val lastLoc = try { manager.getLastKnownLocation(LocationManager.GPS_PROVIDER) ?: manager.getLastKnownLocation(LocationManager.NETWORK_PROVIDER) } catch (_: SecurityException) { null }
+                      if (lastLoc != null) {
+                       viewModel.loadCampusLoopAround(lastLoc.latitude, lastLoc.longitude)
+                       mapViewRef.value?.controller?.animateTo(GeoPoint(lastLoc.latitude, lastLoc.longitude))
+                       mapViewRef.value?controller?.setZoom(17.0)
+                      } else {
+                       viewModel.showError("还没拿到定位：请等地图出现定位标记再点示例校园环线。")
+                      }
+                     }
+                    },
                     enabled = !state.isRunning,
                 ) { Text("示例校园环线") }
                 Spacer(modifier = Modifier.padding(4.dp))
