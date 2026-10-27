@@ -54,8 +54,8 @@ import org.osmdroid.util.GeoPoint
 import org.osmdroid.views.MapView
 import org.osmdroid.views.overlay.MapEventsOverlay
 import org.osmdroid.views.overlay.Marker
-import org.osmdroid.views.overlay.mylocation.GpsMyLocationProvider
-import org.osmdroid.views.overlay.mylocation.MyLocationNewOverlay
+import org.osmdroid.views.overlay.myLocation.GpsMyLocationProvider
+import org.osmdroid.views.overlay.myLocation.MyLocationNewOverlay
 import org.osmdroid.views.overlay.Polyline
 import org.osmdroid.events.MapEventsReceiver
 
@@ -103,6 +103,7 @@ fun MapScreen(viewModel: SimulationViewModel) {
                 MapView(ctx).apply {
                 mapViewRef.value = this
                     setTileSource(TileSourceFactory.MAPNIK)
+                    setUseDataConnection(true)
                     setMultiTouchControls(true)
                     controller.setZoom(16.0)
                     controller.setCenter(GeoPoint(39.996, 116.394))
@@ -225,32 +226,61 @@ fun MapScreen(viewModel: SimulationViewModel) {
             Row {
                 Button(
                     onClick = {
-                        val overlay = mapViewRef.value?.overlays?.filterIsInstance<MyLocationNewOverlay>()?.firstOrNull()
+                     val mapView = mapViewRef.value
+                        var overlay = mapView?.overlays?.filterIsInstance<MyLocationNewOverlay>()?.firstOrNull()
+                        if (overlay == null && mapView != null && (ContextCompat.checkSelfPermission(context, Manifest.permission.ACCESS_FINE_LOCATION) == PackageManager.PERMISSION_GRANTED || ContextCompat.checkSelfPermission(context, Manifest.permission.ACCESS_COARSE_LOCATION) == PackageManager.PERMISSION_GRANTED)) {
+                         overlay = MyLocationNewOverlay(GpsMyLocationProvider(context), mapView)
+                         overlay.enableMyLocation()
+                         mapView.overlays.add(overlay)
+                        }
                         val loc = overlay?.myLocation
                         if (loc != null) {
                             mapViewRef.value?.controller?.animateTo(loc)
                             mapViewRef.value?.controller?.setZoom(17.0)
+                        } else if (overlay != null) {
+                         overlay.runOnFirstFix {
+                          val firstLoc = overlay?.myLocation
+                          if (firstLoc != null) {
+                           mapView?.post {
+                            mapView?.controller?.animateTo(firstLoc)
+                            mapView?.controller?.setZoom(17.0)
+                           }
+                          }
+                         }
+                         viewModel.showError("正在等第一次定位：请稍等几秒再点回到我位置。")
                         } else {
-                            viewModel.showError("还没拿到定位：请等地图出现蓝点，或确认已给定位权限并打开 GPS。")
+                            viewModel.showError("还没拿到定位：请等地图出现定位标记，或确认已给定位权限并打开 GPS。")
                         }
                     },
                 ) { Text("回到我位置") }
                 Spacer(modifier = Modifier.padding(4.dp))
                 Button(
-                    onClick = { viewModel.saveMyRoute(context) },
-                    enabled = !state.isRunning,
-                ) { Text("保存我的校园路线") }
-                Spacer(modifier = Modifier.padding(4.dp))
+                 onClick = {
+                  mapViewRef.value?.apply {
+                   setTileSource(TileSourceFactory.MAPNIK)
+                   invalidate()
+                  }
+                 },
+                 ) { Text("刷新底图") }
+            }
+            Row {
                 Button(
                     onClick = { viewModel.loadMyRoute(context) },
                     enabled = !state.isRunning,
                 ) { Text("我的校园路线") }
+                Spacer(modifier = Modifier.padding(4.dp))
+                Button(
+                    onClick = { viewModel.saveMyRoute(context) },
+                    enabled = !state.isRunning,
+                ) { Text("保存我的校园路线") }
             }
             Row {
                 Button(
                     onClick = { gpxLauncher.launch(arrayOf("*/*")) },
                     enabled = !state.isRunning,
                 ) { Text("导入 GPX") }
+            }
+            Row {
                 Spacer(modifier = Modifier.padding(4.dp))
                 Button(
                     onClick = {
@@ -358,7 +388,7 @@ fun MapScreen(viewModel: SimulationViewModel) {
                                 null
                             }
                             if (loc == null) {
-                                viewModel.showError("还没拿到定位：请等地图出现蓝点再开始摇杆。")
+                                viewModel.showError("还没拿到定位：请等地图出现定位标记再开始摇杆。")
                             } else {
                                 viewModel.startJoystick(context, loc.latitude, loc.longitude)
                             }
