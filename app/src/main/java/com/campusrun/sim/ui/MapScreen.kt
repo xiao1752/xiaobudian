@@ -493,7 +493,13 @@ fun MapScreen(viewModel: SimulationViewModel) {
                             if (loc == null) {
                                 viewModel.showError("还没拿到定位：请等地图出现定位标记再开始摇杆。")
                             } else {
-                                viewModel.startJoystick(context, loc.latitude, loc.longitude)
+                                                        
+                                if (Settings.canDrawOverlays(context)) {
+                                 context.startService(Intent(context, FloatingJoystickService::class.java))
+                                 viewModel.startJoystick(context, loc.latitude, loc.longitude)
+                                } else {
+                                 viewModel.showError("请先允许悬浮窗权限，再开始摇杆。")
+                                }
                             }
                         }) { Text("开始摇杆") }
                     } else if (!state.isPaused) {
@@ -507,6 +513,15 @@ fun MapScreen(viewModel: SimulationViewModel) {
                         enabled = state.isRunning,
                     ) { Text("停止") }
                 }
+                Row {
+                 Button(onClick = {
+                  if (Settings.canDrawOverlays(context)) {
+                   context.startService(Intent(context, FloatingJoystickService::class.java))
+                  } else {
+                   context.startActivity(Intent(Settings.ACTION_MANAGE_OVERLAY_PERMISSION, Uri.parse("package:" + context.packageName)))
+                  }
+                 }) { Text("开悬浮摇杆") }
+                }
                 Box(
                     modifier = Modifier
                     .size(180.dp)
@@ -515,14 +530,18 @@ fun MapScreen(viewModel: SimulationViewModel) {
                     .pointerInput(Unit) {
                         detectDragGestures(
                             onDragEnd = {
-                                padOffsetX = 0f
+                                if (!JoystickInputBus.locked) {
+                                 padOffsetX = 0f
                                 padOffsetY = 0f
                                 viewModel.updateJoystick(0.0, 0.0)
+                                }
                             },
                             onDragCancel = {
-                                padOffsetX = 0f
+                                if (!JoystickInputBus.locked) {
+                                 padOffsetX = 0f
                                 padOffsetY = 0f
                                 viewModel.updateJoystick(0.0, 0.0)
+                                }
                             },
                         ) { change, dragAmount ->
                             change.consume()
