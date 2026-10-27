@@ -484,21 +484,21 @@ fun MapScreen(viewModel: SimulationViewModel) {
                             val manager = context.getSystemService(
                                 Context.LOCATION_SERVICE
                             ) as LocationManager
-                            val loc = try {
+                            /* 优先使用 MyLocation overlay 的当前定位，仅在其为空时才回退到 LocationManager 的最后已知位置，避免从远离真实校园位置的陈旧位置起步。 */ val overlayLoc = mapViewRef.value?.overlays?.filterIsInstance<MyLocationNewOverlay>()?.firstOrNull()?.myLocation; val lastLoc = when (overlayLoc) { null -> try {
                                 manager.getLastKnownLocation(LocationManager.GPS_PROVIDER)
                                 ?: manager.getLastKnownLocation(LocationManager.NETWORK_PROVIDER)
                             } catch (_: SecurityException) {
                                 null
                             }
-                            if (loc == null) {
+                            else -> null }; val startPoint = overlayLoc ?: lastLoc?.let { GeoPoint(it.latitude, it.longitude) }; if (startPoint == null) {
                                 viewModel.showError("还没拿到定位：请等地图出现定位标记再开始摇杆。")
                             } else {
                                                         
                                 if (Settings.canDrawOverlays(context)) {
                                  context.startService(Intent(context, FloatingJoystickService::class.java))
-                                 viewModel.startJoystick(context, loc.latitude, loc.longitude)
+                                 viewModel.startJoystick(context, startPoint.latitude, startPoint.longitude)
                                 } else {
-                                 viewModel.startJoystick(context, loc.latitude, loc.longitude)
+                                 viewModel.startJoystick(context, startPoint.latitude, startPoint.longitude)
                                  viewModel.showError("未授予悬浮窗权限，悬浮摇杆不可用，但仍可使用应用内摇杆。")
                                 }
                             }
